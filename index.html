@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="format-detection" content="telephone=no">
+    <title>Pack-Planner.AI — Smart Packing Planner</title>
+    <meta name="description" content="Climate-smart packing planner for 100+ cities. Custom checklists, drag-and-drop bag organizer, email and Apple Notes export.">
+    <meta property="og:title" content="Pack-Planner.AI — Smart Packing Planner">
+    <meta property="og:description" content="Climate-smart packing lists for any destination with real temperature data.">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Pack-Planner.AI">
+    <meta name="twitter:description" content="Climate-smart packing lists for any destination.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧳</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧳</text></svg>">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        html{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;min-height:100%;overscroll-behavior:none;
+            padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+            padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+        @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+        .anim-bounce{animation:bounce 1s ease infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .anim-spin{animation:spin 1s linear infinite}
+        @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(59,130,246,0.5)}70%{box-shadow:0 0 0 8px rgba(59,130,246,0)}100%{box-shadow:0 0 0 0 rgba(59,130,246,0)}}
+        .pulse-select{animation:pulse-ring 1.2s ease infinite}
+        input[type="date"]{color-scheme:dark;min-height:44px;font-size:16px}
+        input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer;padding:8px}
+        input[type="text"],input[type="email"]{font-size:16px}
+        button{min-height:44px;touch-action:manipulation}
+        .modal-overlay{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+        .safe-bottom{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+        ::-webkit-scrollbar{width:4px}
+        ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:4px}
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useCallback,useEffect,useRef}=React;
+
+const BAGS={
+    small:{label:"Small Carry-On (WITTCHEN)",cap:34,emoji:"🧳",desc:"Cabin · 55×40×20cm"},
+    medium:{label:"Medium Check-In (Delsey)",cap:45,emoji:"📦",desc:"Check-in · 67×44×28cm"},
+    large:{label:"Large Check-In (Samsonite)",cap:70,emoji:"🧰",desc:"Check-in · 75×50×30cm"},
+};
+
+const COLORS=["bg-blue-300","bg-purple-300","bg-amber-300","bg-rose-300","bg-green-300","bg-fuchsia-300","bg-violet-300","bg-lime-300","bg-cyan-300","bg-orange-300","bg-teal-300","bg-pink-300","bg-blue-400","bg-purple-400","bg-amber-400","bg-slate-300","bg-emerald-300","bg-red-300"];
+
+// ─── TEMPERATURE DATABASE (100+ cities) ───────────────────────────────────
+const T={"abu dhabi":{high:[24,25,29,34,39,41,43,43,40,36,31,26],low:[13,14,17,21,25,27,30,30,27,23,18,15]},"accra":{high:[31,32,32,32,31,29,28,27,28,30,31,31],low:[23,24,24,24,24,23,23,22,23,23,24,23]},"amsterdam":{high:[6,6,10,13,17,20,22,22,19,14,9,6],low:[1,0,3,5,8,11,13,13,10,7,4,2]},"ankara":{high:[4,6,11,17,22,26,30,31,26,20,13,6],low:[-3,-2,1,6,10,14,17,17,12,8,3,-1]},"athens":{high:[13,14,16,20,25,30,33,33,29,24,18,14],low:[7,7,8,11,16,20,23,23,20,16,11,8]},"auckland":{high:[24,24,23,20,17,15,14,15,16,18,20,22],low:[16,16,15,12,10,8,7,7,9,10,12,14]},"bali":{high:[33,33,33,34,33,31,30,30,31,33,33,33],low:[24,24,24,24,24,23,23,23,23,24,24,24]},"bangkok":{high:[33,34,35,36,35,33,33,32,32,32,32,32],low:[22,24,26,27,26,26,25,25,25,25,24,22]},"barcelona":{high:[14,15,17,19,22,26,29,29,26,22,17,14],low:[6,7,9,11,15,19,22,22,19,15,10,7]},"beijing":{high:[2,5,12,20,27,31,31,30,26,19,10,3],low:[-8,-6,0,8,14,19,22,21,15,8,0,-6]},"berlin":{high:[3,4,9,13,19,22,25,24,19,13,7,4],low:[-2,-2,1,4,9,12,14,14,10,6,2,-1]},"bogota":{high:[20,20,20,19,19,18,18,18,19,19,19,20],low:[6,7,8,9,9,8,7,7,8,9,8,7]},"boston":{high:[3,4,9,14,20,25,29,28,24,17,11,5],low:[-5,-4,0,5,10,15,19,18,14,8,3,-3]},"brussels":{high:[6,7,11,14,18,21,23,23,20,15,10,6],low:[1,1,3,5,9,12,14,14,11,7,4,2]},"bucharest":{high:[2,5,11,18,24,27,30,30,25,18,10,4],low:[-5,-3,1,6,11,15,17,16,12,7,2,-3]},"budapest":{high:[3,5,11,17,23,26,28,28,23,17,9,4],low:[-2,-1,3,7,12,15,17,17,13,7,3,-1]},"buenos aires":{high:[30,29,26,22,19,15,15,17,19,22,25,28],low:[20,20,17,13,10,7,7,8,10,13,16,18]},"cairo":{high:[19,21,24,28,33,35,36,35,34,30,25,20],low:[9,10,12,15,19,22,24,24,22,19,14,10]},"cape town":{high:[27,28,26,23,20,18,17,18,19,22,24,26],low:[16,16,14,12,9,8,7,8,9,11,14,15]},"cancun":{high:[29,30,31,32,33,33,34,34,33,31,30,29],low:[20,20,21,23,24,25,25,25,24,23,22,21]},"chicago":{high:[0,2,8,15,21,27,29,28,24,17,9,2],low:[-8,-6,-2,4,10,16,19,18,14,7,1,-6]},"copenhagen":{high:[3,3,6,11,16,20,22,22,18,12,7,4],low:[-1,-1,1,4,8,12,14,14,11,7,3,0]},"delhi":{high:[21,24,30,36,40,40,35,34,34,34,29,23],low:[7,10,15,21,27,28,27,26,24,19,12,8]},"doha":{high:[22,23,28,33,39,42,43,42,40,35,30,24],low:[13,14,17,21,27,29,31,31,28,24,19,15]},"dubai":{high:[24,25,28,33,38,40,42,42,39,35,30,26],low:[14,15,17,21,25,27,30,30,27,23,19,16]},"dublin":{high:[8,9,10,12,15,18,19,19,17,14,10,9],low:[3,3,3,5,7,10,12,12,10,7,4,3]},"edinburgh":{high:[7,8,10,12,15,17,19,19,17,13,9,7],low:[1,1,2,4,6,9,11,11,9,6,3,1]},"florence":{high:[10,12,15,19,23,28,31,31,27,21,15,11],low:[2,3,5,8,12,16,18,18,15,11,6,3]},"frankfurt":{high:[4,6,10,15,19,23,25,24,20,14,8,5],low:[-1,0,2,5,9,13,15,14,11,6,2,0]},"guangzhou":{high:[18,19,22,26,30,32,33,33,32,28,24,20],low:[10,12,15,19,23,25,25,25,24,20,15,11]},"hanoi":{high:[20,21,23,28,33,34,34,33,32,29,25,22],low:[14,15,18,22,25,26,27,26,25,22,18,15]},"helsinki":{high:[-2,-3,2,8,15,19,22,20,15,8,3,-1],low:[-8,-9,-5,0,5,10,14,12,8,3,-1,-6]},"ho chi minh":{high:[32,33,34,35,34,32,32,31,31,31,31,31],low:[22,23,25,26,25,25,24,24,24,24,23,22]},"hong kong":{high:[18,18,21,25,29,31,32,31,31,28,24,20],low:[14,14,17,21,25,27,27,27,26,24,19,15]},"houston":{high:[16,18,22,26,30,33,35,35,32,28,22,17],low:[5,7,11,15,20,23,24,24,21,16,10,6]},"istanbul":{high:[9,10,12,17,22,27,29,29,26,21,15,11],low:[3,3,5,9,13,18,21,21,17,13,8,5]},"jakarta":{high:[30,30,31,32,32,32,32,32,33,33,32,31],low:[24,24,24,24,24,24,23,23,24,24,24,24]},"johannesburg":{high:[26,25,24,22,19,16,17,19,23,24,25,26],low:[15,14,13,10,5,2,2,5,9,11,13,14]},"kuala lumpur":{high:[32,33,33,33,33,33,32,32,32,32,32,32],low:[23,23,23,24,24,24,23,23,23,23,23,23]},"lagos":{high:[32,33,33,32,31,29,28,28,28,30,31,32],low:[24,25,26,25,24,23,23,22,23,23,24,24]},"lima":{high:[26,27,27,25,22,19,18,18,18,20,22,24],low:[19,20,19,18,16,15,14,14,14,15,16,18]},"lisbon":{high:[15,16,18,20,22,26,28,29,27,22,17,15],low:[8,9,10,12,14,17,19,19,18,14,11,9]},"london":{high:[8,9,11,14,18,21,23,23,20,15,11,8],low:[2,2,3,5,8,11,14,13,11,8,4,3]},"los angeles":{high:[20,20,20,21,22,24,27,28,27,25,22,20],low:[9,10,11,12,14,16,18,18,17,15,11,9]},"madrid":{high:[10,12,16,18,22,30,34,33,28,21,14,10],low:[2,2,5,7,10,16,19,19,15,10,5,3]},"manila":{high:[30,31,33,35,34,33,31,30,31,31,31,30],low:[22,22,23,25,26,25,25,25,25,24,23,22]},"marrakech":{high:[18,20,23,25,29,34,38,38,33,28,23,19],low:[6,8,10,12,15,18,21,21,18,14,10,7]},"melbourne":{high:[26,26,24,20,17,14,13,15,17,20,22,24],low:[14,15,13,11,8,7,6,6,8,9,11,13]},"mexico city":{high:[22,24,26,27,27,25,23,23,23,22,22,22],low:[6,7,9,11,12,13,12,12,12,11,8,7]},"miami":{high:[25,26,27,29,31,32,33,33,32,30,28,26],low:[16,17,19,21,23,25,26,26,25,23,20,17]},"milan":{high:[6,9,14,18,23,27,30,29,25,19,12,7],low:[0,1,5,9,13,17,19,19,15,10,5,1]},"montreal":{high:[-5,-4,3,11,19,24,27,25,21,13,5,-2],low:[-14,-12,-6,1,8,13,16,15,11,5,-2,-10]},"moscow":{high:[-6,-4,3,11,19,22,24,22,16,8,1,-4],low:[-12,-11,-6,1,7,11,14,12,7,2,-3,-9]},"mumbai":{high:[31,32,33,33,33,32,30,30,30,33,34,33],low:[19,20,23,25,27,26,25,25,24,24,22,20]},"munich":{high:[3,5,9,14,19,22,24,24,19,13,7,3],low:[-4,-4,0,3,7,11,13,12,9,4,1,-3]},"nairobi":{high:[25,26,26,24,23,21,20,21,24,25,23,24],low:[12,13,14,14,13,11,10,10,11,13,14,13]},"new york":{high:[4,5,10,16,22,27,30,29,25,18,12,6],low:[-3,-2,2,7,12,18,21,20,16,10,5,0]},"osaka":{high:[9,10,14,20,25,28,32,33,29,23,17,12],low:[2,2,5,11,16,20,24,25,21,15,9,4]},"oslo":{high:[-1,0,5,10,17,20,23,21,16,9,3,0],low:[-7,-7,-3,1,6,10,13,12,7,3,-1,-5]},"paris":{high:[7,8,12,16,20,23,26,25,22,16,11,7],low:[2,2,5,7,11,14,16,16,13,9,5,3]},"prague":{high:[2,4,8,14,19,22,25,24,19,13,6,3],low:[-3,-2,0,4,8,12,14,13,10,5,1,-2]},"reykjavik":{high:[3,3,4,7,10,13,15,14,11,7,4,3],low:[-2,-2,-1,1,4,7,9,8,6,3,0,-2]},"rio de janeiro":{high:[30,30,29,28,26,25,25,25,25,26,28,29],low:[24,24,24,22,20,19,18,19,19,21,22,23]},"rome":{high:[12,13,16,18,23,28,31,31,27,22,17,13],low:[3,3,5,8,12,16,19,19,16,12,7,4]},"san francisco":{high:[14,15,17,18,19,21,21,21,23,21,17,14],low:[7,8,9,9,11,12,12,13,13,12,9,7]},"santiago":{high:[30,29,27,23,18,15,15,16,18,22,25,28],low:[13,12,10,7,5,3,2,3,5,7,9,12]},"sao paulo":{high:[28,28,27,25,23,21,22,23,23,25,26,27],low:[19,19,18,16,14,12,12,13,14,16,17,18]},"seoul":{high:[2,5,11,17,23,27,29,30,26,20,12,4],low:[-6,-4,2,7,13,18,22,22,17,10,3,-4]},"shanghai":{high:[8,9,14,19,25,28,33,32,28,23,17,10],low:[1,2,6,11,17,21,25,25,21,15,8,3]},"singapore":{high:[31,32,32,32,32,32,31,31,31,32,31,31],low:[24,24,24,25,25,25,25,24,24,24,24,24]},"stockholm":{high:[-1,0,4,10,16,21,23,21,16,10,4,1],low:[-5,-5,-3,1,6,11,14,13,9,5,0,-3]},"sydney":{high:[27,27,25,23,20,17,17,18,20,23,24,26],low:[19,19,18,15,12,9,8,9,11,14,16,18]},"taipei":{high:[19,19,22,25,29,32,34,34,31,27,24,20],low:[13,13,14,18,21,24,26,26,24,21,18,14]},"tel aviv":{high:[18,18,20,24,27,29,31,32,31,28,24,19],low:[10,10,12,14,18,21,24,24,23,20,15,11]},"tokyo":{high:[10,10,14,19,23,26,30,31,27,22,17,12],low:[1,2,5,10,15,19,23,24,21,15,9,4]},"toronto":{high:[-1,0,5,12,19,24,27,26,22,14,8,1],low:[-8,-7,-3,3,9,14,17,17,13,6,1,-5]},"tromsø":{high:[-3,-3,0,3,8,13,16,14,10,4,0,-2],low:[-7,-7,-5,-2,2,6,9,8,5,1,-3,-6]},"vancouver":{high:[7,8,11,14,17,20,23,23,19,14,9,6],low:[1,1,3,5,8,11,13,13,10,7,4,1]},"vienna":{high:[3,5,10,16,21,24,27,26,21,15,8,4],low:[-2,-1,2,6,10,14,16,16,12,7,3,-1]},"warsaw":{high:[1,2,7,13,19,22,24,24,18,13,6,2],low:[-4,-3,0,4,8,12,14,13,9,5,1,-3]},"washington":{high:[6,8,13,19,24,29,32,31,27,21,14,8],low:[-2,0,3,9,14,19,22,21,17,10,4,0]},"zurich":{high:[3,5,10,14,19,22,25,24,20,14,8,4],low:[-2,-1,2,5,9,12,15,14,11,7,2,-1]},"alta":{high:[-5,-5,-2,2,7,13,16,14,9,2,-2,-4],low:[-12,-12,-9,-5,1,5,9,7,3,-2,-7,-10]},"senja":{high:[-2,-2,0,4,8,13,16,14,10,5,1,-1],low:[-6,-6,-4,-1,3,7,10,9,5,2,-2,-5]},"bergen":{high:[4,4,6,9,14,17,18,18,15,11,7,5],low:[0,0,1,3,7,10,12,12,9,6,3,1]}};
+
+const CITIES=Object.keys(T).map(k=>k.split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" ")).sort();
+
+function getCityKey(city){const l=city.toLowerCase().replace(/,.*$/,"").trim();for(const k of Object.keys(T)){if(l.includes(k)||k.includes(l))return k;}return null;}
+function getMonthlyTemps(city,sd,ed){
+    const k=getCityKey(city);if(!k)return{avgHigh:18,avgLow:8,label:"Temperate",months:[]};
+    const d=T[k],s=new Date(sd),e=new Date(ed),ms=new Set(),c=new Date(s);
+    while(c<=e){ms.add(c.getMonth());c.setDate(c.getDate()+1);}
+    const ma=[...ms],hi=ma.map(m=>d.high[m]),lo=ma.map(m=>d.low[m]);
+    const aH=Math.round(hi.reduce((a,b)=>a+b,0)/hi.length),aL=Math.round(lo.reduce((a,b)=>a+b,0)/lo.length);
+    return{avgHigh:aH,avgLow:aL,label:aH<=5?"Arctic":aH<=12?"Cold":aH<=22?"Temperate":aH<=30?"Warm":"Hot / Tropical",months:ma};
+}
+function ct(h){return h<=5?"arctic":h<=12?"cold":h<=22?"temperate":h<=30?"warm":"tropical";}
+
+// ─── PACKING GENERATOR ───────────────────────────────────────────────────
+function generatePackingList(city,days,adults,babies,sd,ed,bags){
+    const temps=getMonthlyTemps(city,sd,ed),climate=ct(temps.avgHigh),containers=[];let id=0;const nid=()=>"c"+(++id);
+    const sc=(b,p,mx)=>Math.min(mx,b+Math.floor(days*p));
+    const bk=Object.keys(bags).filter(k=>bags[k]).sort((a,b)=>BAGS[a].cap-BAGS[b].cap);
+    if(!bk.length)return{containers:[],temps};
+    const asgA=()=>bk[0],asgB=()=>bk[bk.length-1],asgM=()=>bk[Math.min(1,bk.length-1)];
+
+    for(let a=1;a<=adults;a++){
+        const tops=sc(2,0.5,10),bot=sc(1,0.25,5),sox=sc(3,0.5,10);
+        const items=climate==="arctic"||climate==="cold"?[`Thermal base layers (${tops}x)`,`Fleece tops (${Math.ceil(tops*0.6)}x)`,`Warm sweater (1x)`,`Warm trousers (${bot}x)`,`Thermal leggings (${Math.ceil(bot*0.5)}x)`,`Wool socks (${sox} pairs)`,`Sleepwear (1 set)`,`Underwear (${sc(3,0.8,12)}x)`]:climate==="warm"||climate==="tropical"?[`T-shirts (${tops}x)`,`Light shirts (${Math.ceil(tops*0.5)}x)`,`Shorts (${bot}x)`,`Light trousers (${Math.ceil(bot*0.5)}x)`,`Light socks (${sox} pairs)`,`Sleepwear (1 set)`,`Underwear (${sc(3,0.8,12)}x)`,`Swimsuit (1x)`]:[`Layering tops (${tops}x)`,`Light sweater (${Math.ceil(tops*0.4)}x)`,`Jeans / chinos (${bot}x)`,`Versatile trousers (${Math.ceil(bot*0.5)}x)`,`Socks (${sox} pairs)`,`Sleepwear (1 set)`,`Underwear (${sc(3,0.8,12)}x)`,`Light jacket (1x)`];
+        containers.push({id:nid(),name:adults===1?"Clothes Cube":`Adult ${a} Clothes`,icon:a===1?"👕":"👗",size:Math.min(14,8+Math.floor(days*0.4)),location:asgA(),items});
+    }
+    for(let a=1;a<=adults;a++){
+        const si=climate==="arctic"||climate==="cold"?["Waterproof hiking boots","Thermal socks (2 pairs)","Shoe bag"]:climate==="tropical"||climate==="warm"?["Walking shoes","Sandals / flip-flops","Shoe bag"]:["Waterproof shoes","Casual shoes","Shoe bag"];
+        containers.push({id:nid(),name:adults===1?"Shoes":`Shoes (Adult ${a})`,icon:a===1?"👞":"👠",size:7,location:asgA(),items:si});
+    }
+    containers.push({id:nid(),name:"Toiletries",icon:"🧼",size:5+adults,location:asgM(),items:[`Toothbrush & paste (${adults}x)`,`Deodorant (${adults}x)`,climate==="tropical"?"Sunscreen SPF 50+":"Moisturizer","Hair brush","Face care","Travel shampoo"]});
+    containers.push({id:nid(),name:"Medications",icon:"💊",size:4,location:asgB(),items:["Prescription meds","Paracetamol","Cold remedies","Allergy medicine","Plasters",climate==="tropical"?"Anti-diarrhea meds":"Throat lozenges"]});
+    if(climate==="arctic"||climate==="cold")containers.push({id:nid(),name:"Outerwear",icon:"🧥",size:10,location:asgB(),items:[climate==="arctic"?"Heavy winter jacket":"Warm waterproof jacket","Fleece mid-layer","Warm hat","Insulated gloves",climate==="arctic"?"Neck gaiter":"Light scarf","Rain cover"]});
+    else if(climate==="temperate")containers.push({id:nid(),name:"Outerwear",icon:"🧥",size:7,location:asgB(),items:["Light waterproof jacket","Packable umbrella","Light scarf","Hoodie / sweater"]});
+
+    if(babies>0){
+        const bt=sc(4,0.7,14),bb=sc(2,0.4,8);
+        const bc=climate==="arctic"||climate==="cold"?[`Bodysuits (${bt}x)`,`Warm tops (${Math.ceil(bt*0.5)}x)`,`Warm trousers (${bb}x)`,`Warm socks (${sc(3,0.5,8)} pairs)`,`Mittens (2 pairs)`,`Warm hats (2x)`]:climate==="tropical"||climate==="warm"?[`Light bodysuits (${bt}x)`,`Short-sleeve tops (${Math.ceil(bt*0.5)}x)`,`Light pants (${bb}x)`,`Socks (${sc(2,0.3,6)} pairs)`,`Sun hat (1x)`,`UV top (1x)`]:[`Bodysuits (${bt}x)`,`Long-sleeve tops (${Math.ceil(bt*0.5)}x)`,`Pants (${bb}x)`,`Socks (${sc(3,0.4,7)} pairs)`,`Hat (1x)`,`Cardigan (1x)`];
+        containers.push({id:nid(),name:"Baby Clothes 1",icon:"👶",size:Math.min(10,6+Math.floor(days*0.3)),location:asgB(),items:bc});
+        containers.push({id:nid(),name:"Baby Clothes 2",icon:"🍼",size:Math.min(9,5+Math.floor(days*0.3)),location:asgB(),items:[`Extra bodysuits (${Math.ceil(bt*0.4)}x)`,climate==="arctic"?"Fleece snowsuit":"Light jacket",`Cardigans (2x)`,`Pyjamas (${sc(2,0.2,5)}x)`,`Blankets (2x)`,climate==="arctic"?"Bunting bag":"Muslin cloths (3x)"]});
+        containers.push({id:nid(),name:"Baby Food",icon:"🥣",size:9,location:asgB(),items:[`Formula (${Math.ceil(days*0.4)} lbs)`,"Bottles (4-6)","Nipples",`Food jars (${sc(6,1.2,18)}x)`,"Snacks","Utensils"]});
+        containers.push({id:nid(),name:"Diapers & Wipes",icon:"🩷",size:10,location:asgB(),items:[`Diapers (${sc(15,3,50)})—half supply`,"Wet wipes","Diaper cream",`Bibs (${sc(4,0.5,10)}x)`,"Changing mat","Nappy bags"]});
+        containers.push({id:nid(),name:"Baby Medicine",icon:"🩹",size:4,location:asgB(),items:["Infant pain relief","Thermometer","Saline drops","Teething gel","Rash cream",climate==="tropical"?"Baby sunscreen":"Baby moisturizer"]});
+        containers.push({id:nid(),name:"Baby Toys",icon:"🧸",size:5,location:asgB(),items:["Stuffed toy","Teething toys (2-3)","Board book","Rattle","Pacifiers (2-3)","Pacifier clips"]});
+    }
+    containers.forEach((c,i)=>c.color=COLORS[i%COLORS.length]);
+    // Balance
+    for(const b of bk){let tot=containers.filter(c=>c.location===b).reduce((s,c)=>s+c.size,0);if(tot>BAGS[b].cap){const ov=containers.filter(c=>c.location===b).sort((a,b2)=>a.size-b2.size);for(const it of ov){if(tot<=BAGS[b].cap)break;for(const o of bk){if(o===b)continue;const oT=containers.filter(c=>c.location===o).reduce((s,c)=>s+c.size,0);if(oT+it.size<=BAGS[o].cap){it.location=o;tot-=it.size;break;}}}}}
+    return{containers,temps};
+}
+
+// ─── EMAIL / NOTES BUILDERS ───────────────────────────────────────────────
+function buildEmailBody(containers,ti,temps,ab){
+    const fD=d=>new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+    let b=`PACKING LIST\n${ti.city} · ${fD(ti.startDate)} – ${fD(ti.endDate)} (${ti.days}d)\n${ti.adults} adult${ti.adults>1?"s":""}${ti.babies>0?`, ${ti.babies} child${ti.babies>1?"ren":""}`:""}\n🌡️ ${temps.avgLow}°C–${temps.avgHigh}°C (${temps.label})\n\n`;
+    for(const bk of Object.keys(ab).filter(k=>ab[k])){const items=containers.filter(c=>c.location===bk);const tot=items.reduce((s,c)=>s+c.size,0);b+=`${BAGS[bk].emoji} ${bk.toUpperCase()} (${tot}L/${BAGS[bk].cap}L)\n`;items.forEach(c=>{b+=`\n  ${c.icon} ${c.name} (${c.size}L)\n`;c.items.forEach(i=>b+=`     [ ] ${i}\n`);});}
+    const stg=containers.filter(c=>c.location==="staging");if(stg.length)stg.forEach(c=>{b+=`\n  ${c.icon} ${c.name}\n`;c.items.forEach(i=>b+=`     [ ] ${i}\n`);});
+    return b;
+}
+function buildChecklist(containers,ti,temps,ab){
+    const fD=d=>new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});
+    let t=`🧳 PACKING CHECKLIST\n${ti.city} · ${fD(ti.startDate)} – ${fD(ti.endDate)}\n${ti.adults} adult${ti.adults>1?"s":""}${ti.babies>0?`, ${ti.babies} child${ti.babies>1?"ren":""}`:""}\n🌡️ ${temps.avgLow}°C–${temps.avgHigh}°C\n\n`;
+    for(const bk of Object.keys(ab).filter(k=>ab[k])){const items=containers.filter(c=>c.location===bk);const tot=items.reduce((s,c)=>s+c.size,0);t+=`━━━━━━━━━━━━━━━━━━━━\n${BAGS[bk].emoji} ${bk.toUpperCase()} (${tot}L/${BAGS[bk].cap}L)\n━━━━━━━━━━━━━━━━━━━━\n\n`;items.forEach(c=>{t+=`${c.icon} ${c.name} (${c.size}L)\n`;c.items.forEach(i=>t+=`☐ ${i}\n`);t+=`\n`;});}
+    return t;
+}
+function sendEmail(emails,subj,body){const to=emails.filter(e=>e.trim()).join(",");if(to)window.open(`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`,"_blank");}
+
+// ─── SVG ICONS ────────────────────────────────────────────────────────────
+function RotateCcwIcon({size=20}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>;}
+function AlertCircleIcon({size=20}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;}
+function SearchIcon({size=16}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;}
+function ChevronRightIcon({size=18}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>;}
+function MinusIcon({size=14}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>;}
+function PlusIcon({size=14}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;}
+function MailIcon({size=18}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,7 12,13 2,7"/></svg>;}
+function NotesIcon({size=18}){return<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>;}
+
+// ─── COUNTER ──────────────────────────────────────────────────────────────
+function Counter({label,emoji,value,onChange,min=0,max=8}){
+    return(<div className="flex items-center justify-between bg-white/10 rounded-xl px-4 py-3 border border-white/20"><div className="flex items-center gap-2"><span className="text-xl">{emoji}</span><span className="text-white font-medium text-sm">{label}</span></div><div className="flex items-center gap-3"><button onClick={()=>onChange(Math.max(min,value-1))} disabled={value<=min} className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 active:bg-white/30 disabled:opacity-30 flex items-center justify-center text-white"><MinusIcon/></button><span className="text-white font-bold text-lg w-6 text-center">{value}</span><button onClick={()=>onChange(Math.min(max,value+1))} disabled={value>=max} className="w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-400 active:bg-blue-300 disabled:opacity-30 flex items-center justify-center text-white"><PlusIcon/></button></div></div>);
+}
+
+// ─── BAG TOGGLE ───────────────────────────────────────────────────────────
+function BagToggle({bagKey,active,onToggle}){
+    const b=BAGS[bagKey];
+    return(<button onClick={()=>onToggle(bagKey)} className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left w-full active:scale-[0.98] ${active?"bg-blue-500/20 border-blue-400":"bg-white/5 border-white/15 opacity-60"}`}><span className="text-2xl">{b.emoji}</span><div className="flex-1 min-w-0"><p className="text-white font-semibold text-sm truncate">{b.label.split("(")[0].trim()}</p><p className="text-blue-300 text-xs">{b.cap}L · {b.desc}</p></div><div className={`w-12 h-7 rounded-full flex items-center px-1 transition-all flex-shrink-0 ${active?"bg-blue-500 justify-end":"bg-slate-600 justify-start"}`}><div className="w-5 h-5 bg-white rounded-full shadow"/></div></button>);
+}
+
+// ─── FORM SCREEN ──────────────────────────────────────────────────────────
+function FormScreen({onSubmit}){
+    const today=new Date().toISOString().split("T")[0];
+    const[city,setCity]=useState("");const[startDate,setStartDate]=useState("");const[endDate,setEndDate]=useState("");
+    const[adults,setAdults]=useState(2);const[babies,setBabies]=useState(1);
+    const[bags,setBags]=useState({small:false,medium:true,large:true});
+    const[suggs,setSuggs]=useState([]);const[open,setOpen]=useState(false);const ref=useRef(null);
+
+    useEffect(()=>{if(city.length>=2){setSuggs(CITIES.filter(c=>c.toLowerCase().includes(city.toLowerCase())).slice(0,8));setOpen(true);}else setOpen(false);},[city]);
+    const pick=s=>{setCity(s);setOpen(false);ref.current?.blur();};
+    const toggleBag=k=>setBags(p=>({...p,[k]:!p[k]}));
+    const days=startDate&&endDate?Math.max(1,Math.ceil((new Date(endDate)-new Date(startDate))/86400000)+1):0;
+    const preview=city&&startDate&&endDate&&days>0?getMonthlyTemps(city,startDate,endDate):null;
+    const anyBag=Object.values(bags).some(Boolean);const valid=city.trim()&&startDate&&endDate&&days>0&&anyBag;
+
+    return(
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4 safe-bottom">
+            <div className="w-full max-w-md">
+                <div className="text-center mb-6"><div className="text-5xl mb-2">🧳</div><h1 className="text-3xl font-bold text-white">Pack-Planner.AI</h1><p className="text-blue-300 text-sm">Climate-smart packing for any destination</p></div>
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20 space-y-4">
+                    <div><label className="text-blue-300 text-xs font-bold uppercase tracking-widest block mb-1.5">📍 Destination</label><div className="relative"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none"><SearchIcon/></div><input ref={ref} value={city} onChange={e=>setCity(e.target.value)} onFocus={()=>city.length>=2&&setOpen(true)} onBlur={()=>setTimeout(()=>setOpen(false),200)} placeholder="Search 100+ cities…" className="w-full bg-white/10 border border-white/25 rounded-xl pl-9 pr-3 py-3 text-white placeholder-blue-400/60 text-sm focus:outline-none focus:border-blue-400"/>
+                    {open&&suggs.length>0&&(<div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-800 border border-white/15 rounded-xl overflow-hidden shadow-2xl max-h-60 overflow-y-auto">{suggs.map((s,i)=><button key={i} onMouseDown={()=>pick(s)} onTouchEnd={e=>{e.preventDefault();pick(s);}} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-white/10 active:bg-white/20 flex items-center gap-2 border-b border-white/5 last:border-0"><span className="text-blue-400"><SearchIcon size={12}/></span>{s}</button>)}</div>)}</div></div>
+
+                    <div><label className="text-blue-300 text-xs font-bold uppercase tracking-widest block mb-1.5">📅 Travel Dates</label><div className="grid grid-cols-2 gap-3"><div><label className="text-blue-400 text-xs block mb-1">Start</label><input type="date" value={startDate} min={today} onChange={e=>{setStartDate(e.target.value);if(endDate&&e.target.value>endDate)setEndDate("");}} className="w-full bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-400"/></div><div><label className="text-blue-400 text-xs block mb-1">End</label><input type="date" value={endDate} min={startDate||today} onChange={e=>setEndDate(e.target.value)} className="w-full bg-white/10 border border-white/25 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-400"/></div></div>{days>0&&<p className="text-blue-200 text-xs mt-1">📅 {days} day{days>1?"s":""}</p>}</div>
+
+                    {preview&&(<div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl px-4 py-2.5 border border-blue-400/30"><p className="text-xs font-bold text-blue-200 mb-0.5">🌡️ Expected Temperature</p><span className="text-white text-sm font-bold">{preview.avgLow}°C — {preview.avgHigh}°C</span> <span className="text-blue-300 text-xs">({preview.label})</span></div>)}
+
+                    <div className="space-y-2"><label className="text-blue-300 text-xs font-bold uppercase tracking-widest block">👥 Travellers</label><Counter label="Adults" emoji="🧑" value={adults} onChange={setAdults} min={1} max={6}/><Counter label="Children / Infants" emoji="👶" value={babies} onChange={setBabies} min={0} max={4}/></div>
+
+                    <div><label className="text-blue-300 text-xs font-bold uppercase tracking-widest block mb-2">🧳 Select Your Bags</label><div className="space-y-2">{Object.keys(BAGS).map(k=><BagToggle key={k} bagKey={k} active={bags[k]} onToggle={toggleBag}/>)}</div>{!anyBag&&<p className="text-red-400 text-xs mt-2">⚠️ Select at least one bag</p>}</div>
+
+                    <button onClick={()=>valid&&onSubmit({city,days,adults,babies,startDate,endDate,bags})} disabled={!valid} className="w-full bg-blue-500 hover:bg-blue-400 active:bg-blue-300 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg text-base">Generate Packing List <ChevronRightIcon/></button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── LOADING ──────────────────────────────────────────────────────────────
+function LoadingScreen({trip,onDone}){
+    const fD=d=>new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+    const STEPS=[`Checking ${trip.city} weather…`,`Planning for ${trip.days} days…`,trip.babies>0?"Adding baby essentials…":"Adding accessories…","Optimising bags…","Done!"];
+    const[step,setStep]=useState(0);
+    useEffect(()=>{const id=setInterval(()=>{setStep(s=>{if(s>=STEPS.length-1){clearInterval(id);setTimeout(onDone,400);return s;}return s+1;});},500);return()=>clearInterval(id);},[]);
+    return(<div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-6"><div className="w-full max-w-sm text-center"><div className="text-6xl mb-5 anim-bounce">🧳</div><h2 className="text-2xl font-bold text-white mb-1">Building Your List…</h2><p className="text-blue-300 text-sm mb-6">{trip.city} · {trip.days}d</p><div className="bg-white/10 rounded-2xl p-5 border border-white/15 space-y-3 text-left">{STEPS.map((s,i)=>(<div key={i} className={`flex items-center gap-3 text-sm transition-all ${i<=step?"text-white":"text-slate-500"}`}><div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${i<step?"bg-green-400":i===step?"bg-blue-400":"bg-slate-700"}`}>{i<step?"✓":i===step?<span className="block w-3 h-3 border-2 border-white border-t-transparent rounded-full anim-spin"/>:""}</div>{s}</div>))}</div></div></div>);
+}
+
+// ─── CONTAINER CARD (tap-to-select on mobile, drag on desktop) ────────────
+function ContainerCard({container,isSelected,isDragging,onSelect,onDragStart,onLongPress}){
+    const p=container.items.slice(0,3),h=container.items.length-3;
+    const timerRef=useRef(null);
+
+    const handleTouchStart=()=>{timerRef.current=setTimeout(()=>{onLongPress(container);},500);};
+    const handleTouchEnd=()=>{if(timerRef.current){clearTimeout(timerRef.current);timerRef.current=null;}};
+
+    return(<div
+        draggable onDragStart={e=>onDragStart(e,container)}
+        onClick={()=>onSelect(container)}
+        onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} onTouchMove={handleTouchEnd}
+        className={`${container.color} p-3 rounded-xl shadow-md select-none border-2 transition-all active:scale-[0.97] ${isSelected?"border-blue-600 ring-2 ring-blue-400 pulse-select scale-[1.02]":"border-black/10"} ${isDragging?"opacity-40":""}`}
+    ><div className="flex items-start justify-between gap-1 mb-2"><div className="flex-1"><div className="text-2xl mb-0.5">{container.icon}</div><h4 className="font-bold text-xs text-slate-900 leading-tight">{container.name}</h4></div><span className="text-xs font-bold text-slate-700 bg-white/60 rounded px-1.5 py-0.5 whitespace-nowrap">{container.size}L</span></div>
+    <div className="bg-white/40 rounded-lg p-1.5 border border-white/30 mb-2"><ul className="space-y-0.5">{p.map((item,i)=><li key={i} className="text-xs text-slate-800 truncate">• {item.split("(")[0].trim()}</li>)}{h>0&&<li className="text-xs text-slate-600 italic">+{h} more</li>}</ul></div>
+    <div className="text-xs text-slate-700 font-semibold">{container.items.length} items</div>
+    </div>);
+}
+
+// ─── DETAIL MODAL (bottom sheet on mobile) ────────────────────────────────
+function DetailModal({container,onClose}){
+    const[checked,setChecked]=useState({});useEffect(()=>setChecked({}),[container?.id]);if(!container)return null;
+    const toggle=i=>setChecked(p=>({...p,[i]:!p[i]}));const done=Object.values(checked).filter(Boolean).length,total=container.items.length;
+    return(<div className="fixed inset-0 bg-black/60 modal-overlay z-50 flex items-end sm:items-center justify-center" onClick={onClose}><div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col safe-bottom" onClick={e=>e.stopPropagation()}><div className={`${container.color} p-5 flex-shrink-0`}><div className="w-10 h-1 bg-black/20 rounded-full mx-auto mb-3 sm:hidden"/><div className="flex justify-between items-start"><div className="flex-1"><h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><span>{container.icon}</span>{container.name}</h2><p className="text-slate-700 text-xs mt-1">{container.size}L · {done}/{total} packed</p><div className="mt-2 bg-black/10 rounded-full h-1.5 overflow-hidden"><div className="bg-green-600 h-full transition-all" style={{width:`${total>0?(done/total)*100:0}%`}}/></div></div><button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-xl text-slate-700 hover:text-slate-900 font-bold">×</button></div></div>
+    <div className="overflow-y-auto flex-1 p-4 -webkit-overflow-scrolling-touch"><div className="space-y-2">{container.items.map((item,i)=>(<button key={i} onClick={()=>toggle(i)} className={`w-full flex items-center gap-3 p-4 rounded-xl border text-left transition-all active:scale-[0.98] ${checked[i]?"bg-green-50 border-green-200":"bg-slate-50 border-slate-200"}`}><div className={`w-6 h-6 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${checked[i]?"bg-green-500 border-green-500":"border-slate-300"}`}>{checked[i]&&<span className="text-white text-xs font-bold">✓</span>}</div><span className={`text-sm ${checked[i]?"text-slate-400 line-through":"text-slate-700"}`}>{item}</span></button>))}</div></div></div></div>);
+}
+
+// ─── EMAIL MODAL ──────────────────────────────────────────────────────────
+function EmailModal({onClose,containers,tripInfo,temps,activeBags}){
+    const[e1,setE1]=useState("");const[e2,setE2]=useState("");const[sent,setSent]=useState(false);
+    const ok=e=>!e||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);const can=(e1.trim()||e2.trim())&&ok(e1)&&ok(e2);
+    const send=()=>{const fD=d=>new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"});sendEmail([e1,e2],`Packing: ${tripInfo.city} (${fD(tripInfo.startDate)}–${fD(tripInfo.endDate)})`,buildEmailBody(containers,tripInfo,temps,activeBags));setSent(true);setTimeout(onClose,2000);};
+    return(<div className="fixed inset-0 bg-black/60 modal-overlay z-50 flex items-end sm:items-center justify-center" onClick={onClose}><div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md overflow-hidden safe-bottom" onClick={e=>e.stopPropagation()}><div className="bg-blue-500 p-5"><div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 sm:hidden"/><div className="flex justify-between items-start"><div><h2 className="text-lg font-bold text-white flex items-center gap-2"><MailIcon size={20}/> Email List</h2></div><button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-xl text-white/70 hover:text-white font-bold">×</button></div></div><div className="p-5">{sent?(<div className="text-center py-6"><div className="text-4xl mb-2">✅</div><p className="font-bold text-slate-900">Email client opened!</p></div>):(<><div className="space-y-3 mb-4"><div><label className="text-slate-600 text-xs font-bold block mb-1">Email 1 *</label><input type="email" value={e1} onChange={e=>setE1(e.target.value)} placeholder="name@example.com" className={`w-full border rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-blue-400 ${e1&&!ok(e1)?"border-red-400":"border-slate-200"}`}/></div><div><label className="text-slate-600 text-xs font-bold block mb-1">Email 2 <span className="text-slate-400 font-normal">(optional)</span></label><input type="email" value={e2} onChange={e=>setE2(e.target.value)} placeholder="partner@example.com" className={`w-full border rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-blue-400 ${e2&&!ok(e2)?"border-red-400":"border-slate-200"}`}/></div></div><button onClick={send} disabled={!can} className="w-full bg-blue-500 hover:bg-blue-400 active:bg-blue-300 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"><MailIcon size={16}/> Open Email Client</button></>)}</div></div></div>);
+}
+
+// ─── APPLE NOTES MODAL ────────────────────────────────────────────────────
+function NotesModal({onClose,containers,tripInfo,temps,activeBags}){
+    const[copied,setCopied]=useState(false);
+    const txt=buildChecklist(containers,tripInfo,temps,activeBags);
+    const handleCopy=async()=>{
+        try{await navigator.clipboard.writeText(txt);}catch{const ta=document.createElement("textarea");ta.value=txt;ta.style.cssText="position:fixed;left:-9999px";document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);}
+        setCopied(true);setTimeout(()=>{try{window.open("mobilenotes://","_blank");}catch{}},500);
+    };
+    const handleShare=async()=>{if(navigator.share){try{await navigator.share({title:`Packing: ${tripInfo.city}`,text:txt});setCopied(true);}catch{}}};
+    const hasShare=typeof navigator!=="undefined"&&typeof navigator.share==="function";
+    return(<div className="fixed inset-0 bg-black/60 modal-overlay z-50 flex items-end sm:items-center justify-center" onClick={onClose}><div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md overflow-hidden safe-bottom" onClick={e=>e.stopPropagation()}><div className="bg-yellow-500 p-5"><div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-3 sm:hidden"/><div className="flex justify-between items-start"><div><h2 className="text-lg font-bold text-white flex items-center gap-2"><NotesIcon size={20}/> Apple Notes</h2><p className="text-yellow-100 text-xs mt-1">Export as checklist</p></div><button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-xl text-white/70 hover:text-white font-bold">×</button></div></div>
+    <div className="p-5">{copied?(<div className="text-center py-6"><div className="text-4xl mb-2">✅</div><p className="font-bold text-slate-900">Checklist copied!</p><p className="text-slate-500 text-sm mt-2">Paste in Apple Notes → select all → tap ☑ icon</p><div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3"><p className="text-xs text-yellow-700">💡 This converts ☐ items into tappable checkboxes</p></div></div>):(<><div className="bg-slate-50 rounded-xl p-3 mb-4 border border-slate-200 max-h-40 overflow-y-auto"><pre className="text-xs text-slate-600 whitespace-pre-wrap font-mono">{txt.slice(0,400)}…</pre></div><div className="space-y-2"><button onClick={handleCopy} className="w-full bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-300 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2"><NotesIcon size={16}/> Copy & Open Notes</button>{hasShare&&<button onClick={handleShare} className="w-full bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-semibold py-3 rounded-xl flex items-center justify-center gap-2 text-sm">📤 Share via…</button>}</div></>)}</div></div></div>);
+}
+
+// ─── DROP ZONE (with tap-to-place target) ─────────────────────────────────
+function DropZone({location,capacity,items,selectedItem,onPlaceHere,onDragOver,onDrop,onSelect,onDragStart,onLongPress,label,draggedItem}){
+    const used=items.reduce((s,c)=>s+c.size,0);const isFull=capacity!==Infinity&&used>capacity;const pct=capacity!==Infinity?Math.min((used/capacity)*100,100):0;
+    const canDrop=selectedItem&&selectedItem.location!==location&&(location==="staging"||used+selectedItem.size<=capacity);
+    const styles={small:"border-orange-300 bg-orange-50",medium:"border-blue-300 bg-blue-50",large:"border-green-300 bg-green-50",staging:"border-slate-300 bg-slate-50"};
+
+    return(<div onDragOver={onDragOver} onDrop={e=>onDrop(e,location)} className={`rounded-xl border-2 border-dashed p-4 transition-all ${styles[location]||styles.staging} ${draggedItem&&draggedItem.location!==location?"ring-2 ring-yellow-400":""} ${isFull?"ring-2 ring-red-500":""}`}>
+        <div className="mb-3">
+            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-sm">{label}</h3>{capacity!==Infinity&&<span className="text-xs font-bold text-slate-600">{used}/{capacity}L</span>}</div>
+            {capacity!==Infinity&&(<><div className="h-2.5 bg-gray-200 rounded-full overflow-hidden mb-1"><div className={`h-full rounded-full transition-all ${pct<=80?"bg-green-500":pct<=100?"bg-yellow-500":"bg-red-500"}`} style={{width:`${pct}%`}}/></div><p className={`text-xs font-semibold ${isFull?"text-red-600":"text-green-600"}`}>{isFull?"❌ Over":"✅ "+(capacity-used)+"L free"}</p></>)}
+        </div>
+
+        {/* Tap-to-place target button — shows when a container is selected */}
+        {canDrop&&(<button onClick={()=>onPlaceHere(location)} className="w-full mb-3 py-3 rounded-xl border-2 border-dashed border-blue-400 bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center gap-2 active:bg-blue-200 transition-all animate-pulse">
+            📥 Tap to place here ({selectedItem.name})
+        </button>)}
+
+        <div className={`grid gap-2 ${location==="staging"?"grid-cols-1 sm:grid-cols-2":"grid-cols-2"}`}>
+            {items.length===0?(<div className="col-span-full flex flex-col items-center justify-center py-10 text-slate-400"><span className="text-2xl mb-1 opacity-30">📭</span><p className="text-xs">Empty</p></div>)
+            :items.map(c=><ContainerCard key={c.id} container={c} isSelected={selectedItem?.id===c.id} isDragging={draggedItem?.id===c.id} onSelect={onSelect} onDragStart={onDragStart} onLongPress={onLongPress}/>)}
+        </div>
+    </div>);
+}
+
+// ─── ORGANIZER ────────────────────────────────────────────────────────────
+function OrganizerScreen({containers,setContainers,original,tripInfo,temps,activeBags,onReset,onNewTrip}){
+    const[dragged,setDragged]=useState(null);const[selected,setSelected]=useState(null);
+    const[detailView,setDetailView]=useState(null);const[showEmail,setShowEmail]=useState(false);const[showNotes,setShowNotes]=useState(false);
+
+    const inLoc=loc=>containers.filter(c=>c.location===loc);
+    const sizeOf=loc=>inLoc(loc).reduce((s,c)=>s+c.size,0);
+    const bagKeys=Object.keys(activeBags).filter(k=>activeBags[k]);
+    const totalPacked=bagKeys.reduce((s,k)=>s+sizeOf(k),0);
+    const totalCap=bagKeys.reduce((s,k)=>s+BAGS[k].cap,0);
+    const overCap=bagKeys.some(k=>sizeOf(k)>BAGS[k].cap);
+
+    // Tap to select / deselect
+    const handleSelect=(c)=>{
+        if(selected?.id===c.id){setSelected(null);}
+        else{setSelected(c);}
+    };
+    // Long press to open detail
+    const handleLongPress=(c)=>{setDetailView(c);};
+    // Tap zone to place selected container
+    const handlePlaceHere=(target)=>{
+        if(!selected)return;
+        setContainers(prev=>prev.map(c=>c.id===selected.id?{...c,location:target}:c));
+        setSelected(null);
+    };
+    // Desktop drag
+    const handleDragStart=(e,c)=>{e.dataTransfer.effectAllowed="move";setDragged(c);};
+    const handleDragOver=e=>{e.preventDefault();e.dataTransfer.dropEffect="move";};
+    const handleDrop=(e,target)=>{
+        e.preventDefault();if(!dragged||dragged.location===target){setDragged(null);return;}
+        const cap=BAGS[target]?BAGS[target].cap:Infinity;
+        if(target!=="staging"&&sizeOf(target)+dragged.size>cap){setDragged(null);return;}
+        setContainers(prev=>prev.map(c=>c.id===dragged.id?{...c,location:target}:c));setDragged(null);
+    };
+    const fD=d=>new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+
+    return(<>
+        <DetailModal container={detailView} onClose={()=>setDetailView(null)}/>
+        {showEmail&&<EmailModal onClose={()=>setShowEmail(false)} containers={containers} tripInfo={tripInfo} temps={temps} activeBags={activeBags}/>}
+        {showNotes&&<NotesModal onClose={()=>setShowNotes(false)} containers={containers} tripInfo={tripInfo} temps={temps} activeBags={activeBags}/>}
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-3 md:p-6 safe-bottom">
+        <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
+                <div><h1 className="text-xl md:text-3xl font-bold text-white mb-1.5">Your Packing Plan</h1><div className="flex flex-wrap gap-1">{[`📍 ${tripInfo.city}`,`📅 ${fD(tripInfo.startDate)}–${fD(tripInfo.endDate)} (${tripInfo.days}d)`,`🌡️ ${temps.avgLow}°–${temps.avgHigh}°C`].map((t,i)=><span key={i} className="bg-white/10 text-blue-200 text-xs px-2 py-0.5 rounded-full border border-white/10">{t}</span>)}</div></div>
+                <div className="flex gap-1.5 flex-wrap"><button onClick={()=>setShowEmail(true)} className="flex items-center gap-1 bg-green-500 active:bg-green-400 text-white font-semibold py-2 px-3 rounded-lg text-xs"><MailIcon size={13}/> Email</button><button onClick={()=>setShowNotes(true)} className="flex items-center gap-1 bg-yellow-500 active:bg-yellow-400 text-white font-semibold py-2 px-3 rounded-lg text-xs"><NotesIcon size={13}/> Notes</button><button onClick={()=>{onReset();setSelected(null);}} className="flex items-center gap-1 bg-white/10 active:bg-white/20 border border-white/20 text-white font-semibold py-2 px-3 rounded-lg text-xs"><RotateCcwIcon size={13}/> Reset</button><button onClick={onNewTrip} className="flex items-center gap-1 bg-blue-500 active:bg-blue-400 text-white font-semibold py-2 px-3 rounded-lg text-xs">✈️ New</button></div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                <div className="bg-white/10 rounded-xl p-3 border border-white/15"><p className="text-blue-300 text-xs">Total</p><p className="text-white text-xl font-bold">{totalPacked}L</p><p className="text-blue-300 text-xs">{Math.round((totalPacked/totalCap)*100)}%</p></div>
+                {bagKeys.map(k=>{const u=sizeOf(k),c=BAGS[k].cap;return(<div key={k} className="bg-white/10 rounded-xl p-3 border border-white/15"><p className="text-blue-300 text-xs">{BAGS[k].emoji} {k[0].toUpperCase()+k.slice(1)}</p><p className="text-white text-xl font-bold">{u}L</p><p className={`text-xs ${u>c?"text-red-400":"text-blue-300"}`}>{u>c?"❌":"✅ "+(c-u)+"L"}</p></div>);})}
+            </div>
+
+            {overCap&&<div className="bg-red-500/20 border border-red-400/30 rounded-xl p-3 mb-3 flex gap-2 items-center"><span className="text-red-400"><AlertCircleIcon size={16}/></span><p className="text-red-200 text-sm"><strong>Over capacity.</strong> Move items.</p></div>}
+
+            {/* Interaction hint */}
+            <div className="bg-emerald-500/10 border border-emerald-400/20 rounded-xl px-3 py-2 mb-4 text-emerald-200 text-sm">
+                {selected
+                    ? `✅ "${selected.name}" selected — tap a bag below to move it, or tap again to deselect`
+                    : "💡 Tap a container to select it → tap a bag zone to move it there. Long-press to see full checklist."}
+            </div>
+
+            {/* Drop zones */}
+            <div className="space-y-4 mb-4">
+                <div className={`grid grid-cols-1 md:grid-cols-${Math.min(bagKeys.length,3)} gap-4`}>
+                    {bagKeys.map(k=><DropZone key={k} location={k} capacity={BAGS[k].cap} items={inLoc(k)} selectedItem={selected} onPlaceHere={handlePlaceHere} onDragOver={handleDragOver} onDrop={handleDrop} onSelect={handleSelect} onDragStart={handleDragStart} onLongPress={handleLongPress} draggedItem={dragged} label={`${BAGS[k].emoji} ${k[0].toUpperCase()+k.slice(1)} (${BAGS[k].cap}L)`}/>)}
+                </div>
+                <DropZone location="staging" capacity={Infinity} items={inLoc("staging")} selectedItem={selected} onPlaceHere={handlePlaceHere} onDragOver={handleDragOver} onDrop={handleDrop} onSelect={handleSelect} onDragStart={handleDragStart} onLongPress={handleLongPress} draggedItem={dragged} label="🗂️ Staging"/>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-blue-300">{["✓ Heavy items at bottom","✓ Roll clothes","✓ Shoes fill gaps","✓ Meds in carry-on"].map((t,i)=><div key={i} className="bg-white/5 rounded-lg px-3 py-2 border border-white/5">{t}</div>)}</div>
+        </div></div>
+    </>);
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────
+function App(){
+    const[screen,setScreen]=useState("form");const[tripInfo,setTripInfo]=useState(null);
+    const[containers,setContainers]=useState([]);const[original,setOriginal]=useState([]);const[temps,setTemps]=useState(null);
+
+    const handleSubmit=trip=>{setTripInfo(trip);setScreen("loading");};
+    const handleDone=()=>{const r=generatePackingList(tripInfo.city,tripInfo.days,tripInfo.adults,tripInfo.babies,tripInfo.startDate,tripInfo.endDate,tripInfo.bags);setContainers(r.containers);setOriginal(r.containers.map(c=>({...c})));setTemps(r.temps);setScreen("organizer");};
+    const handleReset=()=>setContainers(original.map(c=>({...c})));
+    const handleNew=()=>{setContainers([]);setOriginal([]);setTripInfo(null);setTemps(null);setScreen("form");};
+
+    if(screen==="form")return<FormScreen onSubmit={handleSubmit}/>;
+    if(screen==="loading")return<LoadingScreen trip={tripInfo} onDone={handleDone}/>;
+    if(screen==="organizer")return<OrganizerScreen containers={containers} setContainers={setContainers} original={original} tripInfo={tripInfo} temps={temps} activeBags={tripInfo.bags} onReset={handleReset} onNewTrip={handleNew}/>;
+    return null;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
